@@ -443,7 +443,20 @@ async function fetchRestaurants(forceUpdate = false) {
         if (!response.ok) throw new Error(`Failed to fetch restaurants: ${response.status} ${response.statusText}`);
         const restaurants = await response.json();
         console.log(`Fetched ${restaurants.length} restaurants from server`);
-        restaurants.forEach(restaurant => updateMarker(restaurant, forceUpdate));
+        
+        // Create promises for all restaurant updates
+        const updatePromises = restaurants.map(restaurant => 
+            new Promise(async (resolve) => {
+                await updateMarker(restaurant, forceUpdate);
+                resolve();
+            })
+        );
+        
+        // Wait for all updates to complete
+        await Promise.all(updatePromises);
+        
+        // Apply filters after all markers are updated
+        applyFilters();
     } catch (error) {
         console.error('Error fetching restaurants:', error);
     }
@@ -522,7 +535,6 @@ async function updateMarker(restaurant, forceUpdate = false) {
                 this.openPopup();
             });
             
-            marker.addTo(map);
             markers[restaurant.osm_id] = marker;
 
             if (!map.hasClickHandler) {
