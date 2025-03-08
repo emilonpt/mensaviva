@@ -266,7 +266,7 @@ out body;`;
         });
     }
 
-    async getRestaurantsInViewport(bounds) {
+    async getRestaurantsInViewport(bounds, checkForUpdates = false) {
         console.log('Getting restaurants in viewport, original bounds:', bounds);
         const normalizedBounds = this.validateBounds(bounds);
         const subRegions = this.splitBounds(normalizedBounds);
@@ -274,7 +274,13 @@ out body;`;
         // First try to get cached restaurants
         const cachedRestaurants = await this.getCachedRestaurants(normalizedBounds);
         if (cachedRestaurants.length > 0) {
-            // Check if any region needs update
+            // On first load (checkForUpdates = false), return cached results immediately
+            if (!checkForUpdates) {
+                console.log('First load, using cached restaurants:', cachedRestaurants.length);
+                return cachedRestaurants;
+            }
+            
+            // On subsequent loads, check if updates are needed
             const needsUpdate = await Promise.all(
                 subRegions.map(async region => {
                     const bboxKey = this.generateBboxKey(region);

@@ -439,7 +439,7 @@ async function fetchRestaurants(forceUpdate = false) {
     console.log('Fetching restaurants with bounds:', params);
     
     try {
-        const response = await fetch(`/restaurants?south=${params.south}&west=${params.west}&north=${params.north}&east=${params.east}`);
+        const response = await fetch(`/restaurants?south=${params.south}&west=${params.west}&north=${params.north}&east=${params.east}&checkForUpdates=${forceUpdate}`);
         if (!response.ok) throw new Error(`Failed to fetch restaurants: ${response.status} ${response.statusText}`);
         const restaurants = await response.json();
         console.log(`Fetched ${restaurants.length} restaurants from server`);
