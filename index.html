@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="MensaViva - Find and review restaurants">
+    <title>MensaViva</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" />
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="logo-container">
+        <div class="logo-group">
+            <a href="about.html" target="_blank">
+                <img src="logo.png" alt="MensaViva Logo" class="logo">
+            </a>
+            <a href="about.html" target="_blank" class="logo-text">MensaViva</a>
+        </div>
+        <div class="dark-mode-container">
+            <label class="switch">
+                <input type="checkbox" id="dark-mode-toggle">
+                <span class="slider round"></span>
+            </label>
+            <span class="toggle-label">🌙</span>   
+        </div>
+    </div>
+
+    <div class="controls-container">
+        <div class="controls-top">
+            <button id="toggle-search" class="control-button">
+                <i class="fas fa-search"></i>
+            </button>
+            <button id="toggle-filters" class="control-button">
+                <i class="fas fa-filter"></i>
+            </button>
+        </div>
+
+        <div class="search-panel" hidden>
+            <input type="text" id="search-input" placeholder="Go to city...">
+        </div>
+
+        <div class="filters-panel" hidden>
+            <div class="rating-filters">
+                <div class="select-wrapper">
+                    <div class="custom-select" id="food-filter">
+                        <div class="select-selected">🍽️</div>
+                        <div class="select-items select-hide">
+                            <div data-value="">🍽️</div>
+                            <div data-value="1">🍽️1+</div>
+                            <div data-value="2">🍽️2+</div>
+                            <div data-value="3">🍽️3+</div>
+                            <div data-value="4">🍽️4+</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="select-wrapper">
+                    <div class="custom-select" id="price-filter">
+                        <div class="select-selected">💰</div>
+                        <div class="select-items select-hide">
+                            <div data-value="">💰</div>
+                            <div data-value="1">💰1+</div>
+                            <div data-value="2">💰2+</div>
+                            <div data-value="3">💰3+</div>
+                            <div data-value="4">💰4+</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="select-wrapper">
+                    <div class="custom-select" id="ambience-filter">
+                        <div class="select-selected">🌟</div>
+                        <div class="select-items select-hide">
+                            <div data-value="">🌟</div>
+                            <div data-value="1">🌟1+</div>
+                            <div data-value="2">🌟2+</div>
+                            <div data-value="3">🌟3+</div>
+                            <div data-value="4">🌟4+</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="tag-filter-container">
+                <input type="text" id="tags-filter" placeholder="Filter by tags...">
+                <div id="tag-suggestions" class="tag-suggestions"></div>
+                <div id="active-tags" class="active-tags"></div>
+            </div>
+        </div>
+
+        <div class="reviews-toggle-container">
+            <div class="reviews-toggle">
+                <label class="switch">
+                    <input type="checkbox" id="reviews-only">
+                    <span class="slider round"></span>
+                </label>
+                <span class="toggle-label">Reviewed</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="map"></div>
+    
+    <div id="review-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Add Review</h2>
+            
+            <div class="rating-section">
+                <div class="rating-group">
+                    <label>🍽️ Food</label>
+                    <div class="stars" data-rating="food">
+                        <span class="star" data-value="1">★</span>
+                        <span class="star" data-value="2">★</span>
+                        <span class="star" data-value="3">★</span>
+                        <span class="star" data-value="4">★</span>
+                        <span class="star" data-value="5">★</span>
+                    </div>
+                </div>
+                
+                <div class="rating-group">
+                    <label>💰 Price</label>
+                    <div class="stars" data-rating="price">
+                        <span class="star" data-value="1">★</span>
+                        <span class="star" data-value="2">★</span>
+                        <span class="star" data-value="3">★</span>
+                        <span class="star" data-value="4">★</span>
+                        <span class="star" data-value="5">★</span>
+                    </div>
+                </div>
+                
+                <div class="rating-group">
+                    <label>🌟 Ambience</label>
+                    <div class="stars" data-rating="ambience">
+                        <span class="star" data-value="1">★</span>
+                        <span class="star" data-value="2">★</span>
+                        <span class="star" data-value="3">★</span>
+                        <span class="star" data-value="4">★</span>
+                        <span class="star" data-value="5">★</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tags-section">
+                <label>Tags</label>
+                <input type="text" id="tags-input" placeholder="Add tags (comma separated)">
+                <div id="tags-display" class="tags-display"></div>
+            </div>
+            
+            <textarea id="review-text" placeholder="Share your experience..."></textarea>
+            <button id="submit-review">Submit Review</button>
+        </div>
+    </div>
+
+    <div class="fab-container">
+        <button class="fab" id="zoom-in"><i class="fas fa-plus"></i></button>
+        <button class="fab" id="zoom-out"><i class="fas fa-minus"></i></button>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
