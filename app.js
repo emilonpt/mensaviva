@@ -378,7 +378,7 @@ function initializeControls() {
     });
 }
 
-// Apply filters to markers
+// Optimized apply filters function with batch processing
 function applyFilters() {
     console.log('Applying filters:', activeFilters);
     let visibleCount = 0;
@@ -387,6 +387,10 @@ function applyFilters() {
     // Clear all layers first
     reviewedLayer.clearLayers();
     nonReviewedCluster.clearLayers();
+    
+    // Create arrays to hold markers for each layer
+    const reviewedMarkers = [];
+    const nonReviewedMarkers = [];
     
     Object.entries(markers).forEach(([id, marker]) => {
         const restaurant = marker.restaurantData;
@@ -442,24 +446,91 @@ function applyFilters() {
         }
         
         if (visible) {
-            // Add to appropriate layer based on whether it has reviews
+            // Add to appropriate array based on whether it has reviews
             if (hasReviews) {
-                reviewedLayer.addLayer(marker);
+                reviewedMarkers.push(marker);
                 markerLayers[id] = 'reviewed';
             } else {
-                nonReviewedCluster.addLayer(marker);
+                nonReviewedMarkers.push(marker);
                 markerLayers[id] = 'nonReviewed';
             }
             visibleCount++;
         }
     });
     
+    // Add markers to layers in batches
+    const BATCH_SIZE = 50;
+    
+    function addMarkersInBatches(markers, layer, batchIndex = 0) {
+        const start = batchIndex * BATCH_SIZE;
+        const end = Math.min(start + BATCH_SIZE, markers.length);
+        
+        if (start >= markers.length) return;
+        
+        // Add a batch of markers
+        for (let i = start; i < end; i++) {
+            layer.addLayer(markers[i]);
+        }
+        
+        // Schedule next batch in next animation frame
+        if (end < markers.length) {
+            requestAnimationFrame(() => {
+                addMarkersInBatches(markers, layer, batchIndex + 1);
+            });
+        }
+    }
+    
+    // Start adding markers in batches
+    addMarkersInBatches(reviewedMarkers, reviewedLayer);
+    addMarkersInBatches(nonReviewedMarkers, nonReviewedCluster);
+    
     console.log(`Filters applied: ${visibleCount}/${totalCount} restaurants visible`);
 }
 
-// Fetch restaurants in viewport
-async function fetchRestaurants(forceUpdate = false) {
+// Debounce function to limit how often a function can be called
+function debounce(func, wait) {
+    let timeout;
+    return function(...args) {
+        const context = this;
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(context, args), wait);
+    };
+}
+
+// Track the last fetched bounds to avoid redundant fetches
+let lastFetchedBounds = null;
+
+// Check if current bounds are significantly different from last fetched bounds
+function boundsChanged(currentBounds, lastBounds, threshold = 0.2) {
+    if (!lastBounds) return true;
+    
+    const currentCenter = currentBounds.getCenter();
+    const lastCenter = lastBounds.getCenter();
+    
+    // Calculate distance between centers as a percentage of the viewport size
+    const viewportWidth = currentBounds.getEast() - currentBounds.getWest();
+    const viewportHeight = currentBounds.getNorth() - currentBounds.getSouth();
+    
+    const latDiff = Math.abs(currentCenter.lat - lastCenter.lat) / viewportHeight;
+    const lngDiff = Math.abs(currentCenter.lng - lastCenter.lng) / viewportWidth;
+    
+    // Only fetch if the map has moved by more than the threshold percentage
+    return latDiff > threshold || lngDiff > threshold;
+}
+
+// Cache for restaurant data to avoid redundant fetches
+const restaurantDataCache = new Map();
+
+// Fetch restaurants in viewport with debouncing and bounds checking
+const debouncedFetchRestaurants = debounce(async (forceUpdate = false) => {
     const bounds = map.getBounds();
+    
+    // Skip fetch if bounds haven't changed significantly and not forced
+    if (!forceUpdate && !boundsChanged(bounds, lastFetchedBounds)) {
+        console.log('Skipping fetch - map movement too small');
+        return;
+    }
+    
     const params = {
         south: bounds.getSouth(),
         west: bounds.getWest(),
@@ -474,22 +545,50 @@ async function fetchRestaurants(forceUpdate = false) {
         const restaurants = await response.json();
         console.log(`Fetched ${restaurants.length} restaurants from server`);
         
-        // Create promises for all restaurant updates
-        const updatePromises = restaurants.map(restaurant => 
-            new Promise(async (resolve) => {
-                await updateMarker(restaurant, forceUpdate);
-                resolve();
-            })
+        // Update lastFetchedBounds
+        lastFetchedBounds = L.latLngBounds(
+            [bounds.getSouth(), bounds.getWest()],
+            [bounds.getNorth(), bounds.getEast()]
         );
         
-        // Wait for all updates to complete
-        await Promise.all(updatePromises);
+        // Batch process restaurants in chunks to avoid UI freezing
+        const BATCH_SIZE = 20;
+        const batches = [];
         
-        // Apply filters after all markers are updated
-        applyFilters();
+        for (let i = 0; i < restaurants.length; i += BATCH_SIZE) {
+            batches.push(restaurants.slice(i, i + BATCH_SIZE));
+        }
+        
+        let batchIndex = 0;
+        
+        async function processBatch() {
+            if (batchIndex >= batches.length) {
+                // All batches processed, apply filters
+                applyFilters();
+                return;
+            }
+            
+            const batch = batches[batchIndex++];
+            const updatePromises = batch.map(restaurant => 
+                updateMarker(restaurant, forceUpdate)
+            );
+            
+            await Promise.all(updatePromises);
+            
+            // Process next batch in next animation frame to keep UI responsive
+            requestAnimationFrame(() => setTimeout(processBatch, 0));
+        }
+        
+        // Start processing batches
+        processBatch();
     } catch (error) {
         console.error('Error fetching restaurants:', error);
     }
+}, 300); // 300ms debounce time
+
+// Alias for backward compatibility
+async function fetchRestaurants(forceUpdate = false) {
+    debouncedFetchRestaurants(forceUpdate);
 }
 
 // Helper function to format ratings
@@ -526,22 +625,118 @@ function storeRestaurantData(marker, restaurant, avgRatings, tags, comments) {
         tags,
         comments
     };
-    console.log('Storing data for restaurant:', restaurant.name, data);
     marker.restaurantData = data;
 }
 
-// Update marker appearance and popup
+// Create popup content - extracted to a separate function for lazy loading
+function createPopupContent(restaurant, comments, tags, avgRatings) {
+    // Format opening hours
+    const openingHours = restaurant.opening_hours ? 
+        restaurant.opening_hours.split(';').map(h => `<div class="opening-hours-row">${h.trim()}</div>`).join('') :
+        'Opening hours not available';
+
+    // Create popup content
+    const popupContent = document.createElement('div');
+    popupContent.className = 'restaurant-popup';
+    popupContent.innerHTML = `
+        <div class="restaurant-info">
+            <h3>${restaurant.name}</h3>
+            
+            <div class="restaurant-details">
+                ${restaurant.address ? `
+                    <div class="info-row">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span>${restaurant.address}</span>
+                    </div>
+                ` : ''}
+                
+                <div class="info-row">
+                    <i class="fas fa-clock"></i>
+                    <div class="opening-hours">
+                        ${openingHours}
+                    </div>
+                </div>
+            </div>
+
+            <div class="rating-summary">
+                <div class="rating-item">
+                    <h4>🍽️ Food</h4>
+                    <div class="value">${formatRating(avgRatings.food)}</div>
+                </div>
+                <div class="rating-item">
+                    <h4>💰 Price</h4>
+                    <div class="value">${formatRating(avgRatings.price)}</div>
+                </div>
+                <div class="rating-item">
+                    <h4>🌟 Ambience</h4>
+                    <div class="value">${formatRating(avgRatings.ambience)}</div>
+                </div>
+            </div>
+
+            ${tags.length > 0 ? `
+                <div class="tags-list">
+                    ${tags.map(tag => `
+                        <span class="tag" onclick="handleTagClick('${tag.replace(/'/g, "\\'")}')">${tag}</span>
+                    `).join('')}
+                </div>
+            ` : ''}
+        </div>
+
+        ${comments.map(comment => `
+            <div class="comment">
+                <p class="comment-text">${comment.text || ''}</p>
+                <div class="comment-meta">
+                    <span>
+                        ${comment.food_rating ? `🍽️ ${comment.food_rating}` : ''}
+                        ${comment.price_rating ? `${comment.food_rating ? ' • ' : ''}💰 ${comment.price_rating}` : ''}
+                        ${comment.ambience_rating ? `${(comment.food_rating || comment.price_rating) ? ' • ' : ''}🌟 ${comment.ambience_rating}` : ''}
+                    </span>
+                    <span>${new Date(comment.date).toLocaleDateString()}</span>
+                </div>
+                ${comment.tags ? `
+                    <div class="comment-tags">
+                        ${comment.tags.split(',').map(tag => `
+                            <span class="tag">${tag.trim()}</span>
+                        `).join('')}
+                    </div>
+                ` : ''}
+            </div>
+        `).join('')}
+        
+        <button onclick="openReviewModal('${restaurant.osm_id}')">Add Review</button>
+    `;
+    
+    return popupContent;
+}
+
+// Update marker appearance and popup with lazy popup creation
 async function updateMarker(restaurant, forceUpdate = false) {
     try {
-        console.log('Updating marker for restaurant:', restaurant.name);
-        const [commentsResponse, tagsResponse] = await Promise.all([
-            fetch(`/comments/${restaurant.osm_id}`),
-            fetch(`/tags/${restaurant.osm_id}`)
-        ]);
+        const cacheKey = restaurant.osm_id;
+        let cachedData = restaurantDataCache.get(cacheKey);
         
-        const comments = await commentsResponse.json();
-        const tags = await tagsResponse.json();
-        console.log('Fetched data for', restaurant.name, '- Comments:', comments.length, 'Tags:', tags.length);
+        // Only fetch data if we don't have it cached or if forceUpdate is true
+        if (!cachedData || forceUpdate) {
+            const [commentsResponse, tagsResponse] = await Promise.all([
+                fetch(`/comments/${restaurant.osm_id}`),
+                fetch(`/tags/${restaurant.osm_id}`)
+            ]);
+            
+            const comments = await commentsResponse.json();
+            const tags = await tagsResponse.json();
+            
+            // Calculate ratings
+            const avgRatings = calculateAverageRatings(comments);
+            
+            // Cache the data
+            cachedData = { comments, tags, avgRatings };
+            restaurantDataCache.set(cacheKey, cachedData);
+            
+            // Update all tags collection
+            tags.forEach(tag => allTags.add(tag));
+        }
+        
+        const { comments, tags, avgRatings } = cachedData;
         
         // Remove marker from previous layer if it exists
         if (markers[restaurant.osm_id]) {
@@ -555,19 +750,38 @@ async function updateMarker(restaurant, forceUpdate = false) {
         
         let marker = markers[restaurant.osm_id];
         if (!marker) {
-            console.log('Creating new marker for:', restaurant.name);
             marker = L.circleMarker([restaurant.lat, restaurant.lng], {
                 opacity: 1,
             });
             
+            // Use event delegation for mouseover to improve performance
             marker.on('mouseover', function(e) {
-                Object.values(markers).forEach(m => {
-                    if (m !== this) m.closePopup();
-                });
+                // Only close other popups when this one opens
+                if (!this.isPopupOpen()) {
+                    Object.values(markers).forEach(m => {
+                        if (m !== this && m.isPopupOpen()) m.closePopup();
+                    });
+                }
+                
                 this.openPopup();
                 this.setStyle({
                     fillColor: "#F59E0B"
                 });
+            });
+            
+            marker.on('mouseout', function(e) {
+                // Reset fill color when mouse leaves
+                if (!this.isPopupOpen()) {
+                    const hasReviews = this.restaurantData && 
+                        (this.restaurantData.comments.some(comment => 
+                            comment.food_rating || comment.price_rating || 
+                            comment.ambience_rating || comment.text
+                        ) || this.restaurantData.tags.length > 0);
+                    
+                    this.setStyle({
+                        fillColor: hasReviews ? 'SkyBlue' : 'DimGrey'
+                    });
+                }
             });
 
             marker.on('click', function(e) {
@@ -585,90 +799,16 @@ async function updateMarker(restaurant, forceUpdate = false) {
             }
         }
 
-        // Calculate ratings and store data
-        const avgRatings = calculateAverageRatings(comments);
-        storeRestaurantData(markers[restaurant.osm_id], restaurant, avgRatings, tags, comments);
+        // Store restaurant data with marker
+        storeRestaurantData(marker, restaurant, avgRatings, tags, comments);
 
-        // Update all tags collection
-        tags.forEach(tag => allTags.add(tag));
+        // Lazy popup creation - only create popup content when needed
+        marker.unbindPopup(); // Remove any existing popup
         
-        // Format opening hours
-        const openingHours = restaurant.opening_hours ? 
-            restaurant.opening_hours.split(';').map(h => `<div class="opening-hours-row">${h.trim()}</div>`).join('') :
-            'Opening hours not available';
-
-        // Create popup content
-        const popupContent = document.createElement('div');
-        popupContent.className = 'restaurant-popup';
-        popupContent.innerHTML = `
-            <div class="restaurant-info">
-                <h3>${restaurant.name}</h3>
-                
-                <div class="restaurant-details">
-                    ${restaurant.address ? `
-                        <div class="info-row">
-                            <i class="fas fa-map-marker-alt"></i>
-                            <span>${restaurant.address}</span>
-                        </div>
-                    ` : ''}
-                    
-                    <div class="info-row">
-                        <i class="fas fa-clock"></i>
-                        <div class="opening-hours">
-                            ${openingHours}
-                        </div>
-                    </div>
-                </div>
-
-                <div class="rating-summary">
-                    <div class="rating-item">
-                        <h4>🍽️ Food</h4>
-                        <div class="value">${formatRating(avgRatings.food)}</div>
-                    </div>
-                    <div class="rating-item">
-                        <h4>💰 Price</h4>
-                        <div class="value">${formatRating(avgRatings.price)}</div>
-                    </div>
-                    <div class="rating-item">
-                        <h4>🌟 Ambience</h4>
-                        <div class="value">${formatRating(avgRatings.ambience)}</div>
-                    </div>
-                </div>
-
-                ${tags.length > 0 ? `
-                    <div class="tags-list">
-                        ${tags.map(tag => `
-                            <span class="tag" onclick="handleTagClick('${tag.replace(/'/g, "\\'")}')">${tag}</span>
-                        `).join('')}
-                    </div>
-                ` : ''}
-            </div>
-
-            ${comments.map(comment => `
-                <div class="comment">
-                    <p class="comment-text">${comment.text || ''}</p>
-                    <div class="comment-meta">
-                        <span>
-                            ${comment.food_rating ? `🍽️ ${comment.food_rating}` : ''}
-                            ${comment.price_rating ? `${comment.food_rating ? ' • ' : ''}💰 ${comment.price_rating}` : ''}
-                            ${comment.ambience_rating ? `${(comment.food_rating || comment.price_rating) ? ' • ' : ''}🌟 ${comment.ambience_rating}` : ''}
-                        </span>
-                        <span>${new Date(comment.date).toLocaleDateString()}</span>
-                    </div>
-                    ${comment.tags ? `
-                        <div class="comment-tags">
-                            ${comment.tags.split(',').map(tag => `
-                                <span class="tag">${tag.trim()}</span>
-                            `).join('')}
-                        </div>
-                    ` : ''}
-                </div>
-            `).join('')}
-            
-            <button onclick="openReviewModal('${restaurant.osm_id}')">Add Review</button>
-        `;
-
-        marker.bindPopup(popupContent);
+        marker.bindPopup(() => {
+            // This function is only called when the popup is opened
+            return createPopupContent(restaurant, comments, tags, avgRatings);
+        });
 
         const hasReviews = comments.some(comment => 
             comment.food_rating || comment.price_rating || comment.ambience_rating || comment.text
@@ -679,19 +819,17 @@ async function updateMarker(restaurant, forceUpdate = false) {
             fillColor: hasReviews ? 'SkyBlue' : 'DimGrey',
             radius: hasReviews ? 18 : 8,
             weight: 0.5,
-            fillOpacity: 0.8
-        });
-
-        marker.setStyle({
+            fillOpacity: 0.8,
             zIndex: hasReviews ? 1000 : 0
         });
 
-        // Don't add to map directly - we'll handle this in applyFilters
-        // Instead, just track which layer it should belong to
+        // Track which layer it should belong to
         markerLayers[restaurant.osm_id] = hasReviews ? 'reviewed' : 'nonReviewed';
-
+        
+        return marker;
     } catch (error) {
         console.error('Error updating marker:', error);
+        return null;
     }
 }
 
@@ -914,3 +1052,4 @@ initializeZoomControls();
 initializeRatings();
 initializeTags();
 initializeLocation();
+
