@@ -16,6 +16,26 @@ const map = L.map('map', {
 });
 lightLayer.addTo(map);
 
+// Create layer groups for markers
+const reviewedLayer = L.layerGroup();
+const nonReviewedCluster = L.markerClusterGroup({
+    maxClusterRadius: 50,
+    disableClusteringAtZoom: 17,
+    spiderfyOnMaxZoom: true,
+    showCoverageOnHover: false,
+    iconCreateFunction: function(cluster) {
+        return L.divIcon({
+            html: '<div class="cluster-icon">' + cluster.getChildCount() + '</div>',
+            className: 'marker-cluster',
+            iconSize: L.point(40, 40)
+        });
+    }
+});
+
+// Add layers to map
+reviewedLayer.addTo(map);
+nonReviewedCluster.addTo(map);
+
 // Get user location
 async function getUserLocation() {
     try {
@@ -72,6 +92,7 @@ function initializeDarkMode() {
 
 // Store markers and filter state
 const markers = {};
+const markerLayers = {}; // Track which layer each marker belongs to
 let activeFilters = {
     food: '',
     price: '',
@@ -363,6 +384,10 @@ function applyFilters() {
     let visibleCount = 0;
     let totalCount = 0;
     
+    // Clear all layers first
+    reviewedLayer.clearLayers();
+    nonReviewedCluster.clearLayers();
+    
     Object.entries(markers).forEach(([id, marker]) => {
         const restaurant = marker.restaurantData;
         if (!restaurant) return;
@@ -417,10 +442,15 @@ function applyFilters() {
         }
         
         if (visible) {
-            marker.addTo(map);
+            // Add to appropriate layer based on whether it has reviews
+            if (hasReviews) {
+                reviewedLayer.addLayer(marker);
+                markerLayers[id] = 'reviewed';
+            } else {
+                nonReviewedCluster.addLayer(marker);
+                markerLayers[id] = 'nonReviewed';
+            }
             visibleCount++;
-        } else {
-            marker.removeFrom(map);
         }
     });
     
@@ -512,6 +542,16 @@ async function updateMarker(restaurant, forceUpdate = false) {
         const comments = await commentsResponse.json();
         const tags = await tagsResponse.json();
         console.log('Fetched data for', restaurant.name, '- Comments:', comments.length, 'Tags:', tags.length);
+        
+        // Remove marker from previous layer if it exists
+        if (markers[restaurant.osm_id]) {
+            const currentLayer = markerLayers[restaurant.osm_id];
+            if (currentLayer === 'reviewed') {
+                reviewedLayer.removeLayer(markers[restaurant.osm_id]);
+            } else if (currentLayer === 'nonReviewed') {
+                nonReviewedCluster.removeLayer(markers[restaurant.osm_id]);
+            }
+        }
         
         let marker = markers[restaurant.osm_id];
         if (!marker) {
@@ -645,6 +685,10 @@ async function updateMarker(restaurant, forceUpdate = false) {
         marker.setStyle({
             zIndex: hasReviews ? 1000 : 0
         });
+
+        // Don't add to map directly - we'll handle this in applyFilters
+        // Instead, just track which layer it should belong to
+        markerLayers[restaurant.osm_id] = hasReviews ? 'reviewed' : 'nonReviewed';
 
     } catch (error) {
         console.error('Error updating marker:', error);
