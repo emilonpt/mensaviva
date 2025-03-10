@@ -964,6 +964,13 @@ input:checked + .slider:before {
     border: 2px solid var(--primary-color);
 }
 
+.marker-cluster div {
+    font-size: 1rem;
+    height: 40px;
+    width: 40px;
+    border-radius: 50%;
+}
+
 .marker-cluster-small,
 .marker-cluster-medium,
 .marker-cluster-large {
