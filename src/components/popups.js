@@ -80,7 +80,7 @@ class PopupComponent {
                     ${comment.tags ? `
                         <div class="comment-tags">
                             ${comment.tags.split(',').map(tag => `
-                                <span class="tag">${tag.trim()}</span>
+                                <span class="tag" onclick="handleTagClick('${tag.trim().replace(/'/g, "\\'")}')">${tag.trim()}</span>
                             `).join('')}
                         </div>
                     ` : ''}

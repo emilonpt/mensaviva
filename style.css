@@ -327,13 +327,13 @@ body {
 
 /* Clickable restaurant tags */
 /* Clickable restaurant tags */
-.tags-list .tag {
+.tags-list .tag, .comment-tags .tag {
     cursor: pointer;
     transition: all 0.2s;
     opacity: 0.85;
 }
 
-.tags-list .tag:hover {
+.tags-list .tag:hover, .comment-tags .tag:hover {
     background: var(--primary-hover);
     transform: translateY(-1px);
 }
@@ -455,7 +455,7 @@ body {
     top: 50%;
     transform: translateY(-50%);
     color: var(--text-secondary);
-    opacity: 0.5;
+    opacity: 1;
     pointer-events: none;
 }
 
