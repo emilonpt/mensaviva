@@ -49,8 +49,8 @@ class App {
      * Set up map event listeners
      */
     setupMapEventListeners() {
-        MapComponent.map.on('moveend', () => {
-            console.log('Map moved, fetching new restaurants...');
+        MapComponent.map.on('moveend zoomend', () => {
+            console.log('Map moved or zoomed, fetching new restaurants...');
             this.fetchRestaurants();
             
             // Note: URL update is handled in MapComponent.updateUrlWithMapLocation
@@ -65,10 +65,11 @@ class App {
     async fetchRestaurants(forceUpdate = false) {
         console.log('Main.js - fetchRestaurants called');
         const bounds = MapComponent.getBounds();
-        console.log('Main.js - Map bounds:', bounds);
+        const zoom = MapComponent.map.getZoom();
+        console.log('Main.js - Map bounds:', bounds, 'zoom:', zoom);
         
         try {
-            const restaurants = await this.debouncedFetchRestaurants(bounds, forceUpdate);
+            const restaurants = await this.debouncedFetchRestaurants(bounds, forceUpdate, zoom);
             console.log('Main.js - Received restaurants:', restaurants.length);
             
             if (restaurants.length > 0) {
@@ -84,20 +85,94 @@ class App {
                 
                 const processBatch = async () => {
                     if (batchIndex >= batches.length) {
-                        // All batches processed, apply filters
-                        console.log('Main.js - All batches processed, applying filters');
-                        FilteringComponent.applyFilters();
+                        // All batches processed, reapply filters to maintain filter state
+                        console.log('Main.js - All batches processed, reapplying filters');
+                        // Ensure filters are applied after marker updates, both for initial load and navigation
+                        if (FilteringComponent.hasActiveFilters()) {
+                            FilteringComponent.applyFilters();
+                        }
                         return;
                     }
                     
                     const batch = batches[batchIndex++];
                     console.log(`Main.js - Processing batch ${batchIndex} of ${batches.length}`);
                     
-                    const updatePromises = batch.map(restaurant => 
-                        MarkersComponent.updateMarker(restaurant, forceUpdate)
-                    );
+                    // Check filter state before processing batch
+                    const hasFilters = FilteringComponent.hasActiveFilters();
+                    const activeFilters = hasFilters ? FilteringComponent.getActiveFilters() : null;
                     
-                    await Promise.all(updatePromises);
+                    const updatePromises = batch.map(async restaurant => {
+                        // If filters are active, preload data and check all filter criteria
+                        if (hasFilters) {
+                            const [comments, tags] = await Promise.all([
+                                ApiService.getComments(restaurant.osm_id),
+                                ApiService.getTags(restaurant.osm_id)
+                            ]);
+
+                            // Check amenity filter first since it doesn't require comments/tags
+                            if (activeFilters.amenity && restaurant.amenity !== activeFilters.amenity) {
+                                return null;
+                            }
+
+                            const hasReviews = comments.some(comment => 
+                                comment.food_rating || comment.price_rating || comment.ambience_rating || comment.text
+                            ) || tags.length > 0;
+
+                            // Then check reviews filter
+                            if (activeFilters.withReviews && !hasReviews) {
+                                return null;
+                            }
+
+                            // Calculate ratings for other filters
+                            const ratings = comments.reduce((acc, comment) => {
+                                if (comment.food_rating) acc.food.push(comment.food_rating);
+                                if (comment.price_rating) acc.price.push(comment.price_rating);
+                                if (comment.ambience_rating) acc.ambience.push(comment.ambience_rating);
+                                return acc;
+                            }, { food: [], price: [], ambience: [] });
+
+                            const avgRatings = {
+                                food: ratings.food.length ? ratings.food.reduce((a, b) => a + b) / ratings.food.length : null,
+                                price: ratings.price.length ? ratings.price.reduce((a, b) => a + b) / ratings.price.length : null,
+                                ambience: ratings.ambience.length ? ratings.ambience.reduce((a, b) => a + b) / ratings.ambience.length : null
+                            };
+
+                            // Check rating filters
+                            if (activeFilters.food && (!avgRatings.food || avgRatings.food < parseFloat(activeFilters.food))) {
+                                return null;
+                            }
+                            if (activeFilters.price && (!avgRatings.price || avgRatings.price < parseFloat(activeFilters.price))) {
+                                return null;
+                            }
+                            if (activeFilters.ambience && (!avgRatings.ambience || avgRatings.ambience < parseFloat(activeFilters.ambience))) {
+                                return null;
+                            }
+
+                            // Check tags filter
+                            if (activeFilters.tags) {
+                                const searchTags = activeFilters.tags.split(',').map(t => t.trim().toLowerCase()).filter(t => t);
+                                if (searchTags.length > 0) {
+                                    const matchingTags = searchTags.filter(searchTag =>
+                                        tags.some(restaurantTag => 
+                                            restaurantTag.toLowerCase().includes(searchTag)
+                                        )
+                                    );
+                                    if (matchingTags.length !== searchTags.length) {
+                                        return null;
+                                    }
+                                }
+                            }
+
+                            // Store the preloaded data with the restaurant to avoid fetching it again
+                            restaurant.comments = comments;
+                            restaurant.tags = tags;
+                        }
+                        
+                        return MarkersComponent.updateMarker(restaurant, forceUpdate);
+                    });
+                    
+                    // Remove null values from results (filtered out markers)
+                    const results = await Promise.all(updatePromises);
                     
                     // Process next batch in next animation frame to keep UI responsive
                     requestAnimationFrame(() => setTimeout(processBatch, 0));

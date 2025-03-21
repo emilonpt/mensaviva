@@ -1,0 +1,58 @@
+/* Logo Container */
+.logo-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1001;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem var(--controls-left);
+    background: transparent;
+    pointer-events: none;
+}
+
+.logo-group {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(8px);
+    padding: 1.25rem 2rem;
+    border-radius: 60px;
+    pointer-events: auto;
+}
+
+.logo {
+    height: 48px;
+    width: auto;
+    display: block;
+}
+
+.logo-text {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    text-decoration: none;
+}
+
+.logo-group a {
+    text-decoration: none;
+}
+
+.logo-group a:hover {
+    opacity: 0.9;
+}
+
+/* Dark Mode Toggle */
+.dark-mode-container {
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    border-radius: 60px;
+    pointer-events: auto;
+}

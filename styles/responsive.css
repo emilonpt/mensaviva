@@ -1,0 +1,97 @@
+/* Mobile Adjustments */
+@media (max-width: 768px) {
+    :root {
+        --controls-left: 0.5rem;
+    }
+
+    .logo-container {
+        padding: 0.5rem var(--controls-left);
+    }
+
+    .logo-group {
+        padding: 0.5rem 1rem;
+    }
+
+    .logo {
+        height: 24px;
+    }
+
+    .logo-text {
+        font-size: 0.875rem;
+    }
+
+    .controls-container {
+        right: var(--controls-left);
+        top: calc(24px + 2rem);
+    }
+
+    .control-button {
+        width: 40px;
+        height: 40px;
+        font-size: 1rem;
+    }
+
+    .search-panel {
+        height: 40px;
+        width: calc(100vw - 1rem - var(--controls-left) * 2);
+    }
+
+    #search-input {
+        font-size: 0.875rem;
+        padding: 0 1rem;
+    }
+
+    .filters-panel {
+        width: calc(100vw - 1rem - var(--controls-left) * 2);
+        padding: 1rem;
+    }
+
+    .filters select,
+    #tags-filter {
+        height: 36px;
+        font-size: 0.875rem;
+        padding: 0.5rem 2.5rem 0.5rem 1rem;
+    }
+
+    .select-wrapper::after {
+        font-size: 1rem;
+        right: 1rem;
+    }
+
+    .tag-suggestion {
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+    }
+
+    .reviews-toggle-container {
+        padding: 0.5rem 1rem;
+    }
+
+    .toggle-label {
+        font-size: 0.875rem;
+    }
+
+    .switch {
+        width: 40px;
+        height: 20px;
+    }
+
+    .slider:before {
+        height: 16px;
+        width: 16px;
+        left: 2px;
+        bottom: 2px;
+    }
+
+    input:checked + .slider:before {
+        transform: translateX(20px);
+    }
+
+    .fab-container {
+        display: none;
+    }
+
+    #map .leaflet-control-container .leaflet-top {
+        top: calc(24px + 2rem + 40px);
+    }
+}

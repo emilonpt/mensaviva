@@ -11,6 +11,7 @@ class FilteringComponent {
             price: '',
             ambience: '',
             tags: '',
+            amenity: '',
             withReviews: false
         };
         this.reviewsToggle = null;
@@ -72,6 +73,11 @@ class FilteringComponent {
             const hasReviews = comments.some(comment => 
                 comment.food_rating || comment.price_rating || comment.ambience_rating || comment.text
             ) || restaurant.tags.length > 0;
+
+            // Filter by amenity type
+            if (this.activeFilters.amenity && restaurant.amenity !== this.activeFilters.amenity) {
+                visible = false;
+            }
 
             if (this.activeFilters.withReviews && !hasReviews) {
                 visible = false;
@@ -182,6 +188,7 @@ class FilteringComponent {
             this.activeFilters.price || 
             this.activeFilters.ambience || 
             this.activeFilters.tags || 
+            this.activeFilters.amenity ||
             this.activeFilters.withReviews
         );
     }

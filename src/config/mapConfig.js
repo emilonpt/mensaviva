@@ -17,10 +17,16 @@ const mapOptions = {
 
 // Marker cluster options
 const clusterOptions = {
-    maxClusterRadius: 50,
-    disableClusteringAtZoom: 17,
-    spiderfyOnMaxZoom: true,
-    showCoverageOnHover: false,
+    maxClusterRadius: function(zoom) {
+        // Scale cluster radius based on zoom level
+        // At low zoom (further out), use larger radius to group more markers
+        // At high zoom (closer in), use smaller radius for more precise grouping
+        if (zoom <= 12) return 150;        // Far out
+        if (zoom <= 14) return 80;        // Mid-range
+        if (zoom <= 19) return 40;        // Getting closer
+        return 0;                        // Very close
+    },
+    disableClusteringAtZoom: 19,
     iconCreateFunction: function(cluster) {
         return L.divIcon({
             html: '<div class="cluster-icon">' + cluster.getChildCount() + '</div>',

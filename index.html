@@ -84,6 +84,22 @@
                         </div>
                     </div>
                 </div>
+                <div class="select-wrapper">
+                    <div class="custom-select" id="amenity-filter">
+                        <div class="select-selected">🍽️</div>
+                        <div class="select-items select-hide">
+                            <div data-value="">🍽️</div>
+                            <div data-value="restaurant">🍴</div>
+                            <div data-value="cafe">☕</div>
+                            <div data-value="fast_food">🍔</div>
+                            <div data-value="bar">🍸</div>
+                            <div data-value="pub">🍺</div>
+                            <div data-value="food_court">🏢</div>
+                            <div data-value="ice_cream">🍦</div>
+                            <div data-value="bakery">🥐</div>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="tag-filter-container">
                 <input type="text" id="tags-filter" placeholder="Filter by tags...">
@@ -104,6 +120,20 @@
     </div>
 
     <div id="map"></div>
+    <!--
+    <div id="map-legend" class="map-legend">
+        <h4>Food Locations</h4>
+        <div class="legend-item"><span class="color-box" style="background-color: SkyBlue;"></span> Restaurant</div>
+        <div class="legend-item"><span class="color-box" style="background-color: #8B4513;"></span> Cafe</div>
+        <div class="legend-item"><span class="color-box" style="background-color: #FF4500;"></span> Fast Food</div>
+        <div class="legend-item"><span class="color-box" style="background-color: #9370DB;"></span> Bar</div>
+        <div class="legend-item"><span class="color-box" style="background-color: #DAA520;"></span> Pub</div>
+        <div class="legend-item"><span class="color-box" style="background-color: #20B2AA;"></span> Food Court</div>
+        <div class="legend-item"><span class="color-box" style="background-color: #FF69B4;"></span> Ice Cream</div>
+        <div class="legend-item"><span class="color-box" style="background-color: #F4A460;"></span> Bakery</div>
+    </div>
+    -->
+
     
     <div id="review-modal" class="modal">
         <div class="modal-content">
@@ -125,11 +155,11 @@
                 <div class="rating-group">
                     <label>💰 Price</label>
                     <div class="stars" data-rating="price">
-                        <span class="star" data-value="1">★</span>
-                        <span class="star" data-value="2">★</span>
-                        <span class="star" data-value="3">★</span>
-                        <span class="star" data-value="4">★</span>
-                        <span class="star" data-value="5">★</span>
+                        <span class="star" data-value="1">$</span>
+                        <span class="star" data-value="2">$</span>
+                        <span class="star" data-value="3">$</span>
+                        <span class="star" data-value="4">$</span>
+                        <span class="star" data-value="5">$</span>
                     </div>
                 </div>
                 

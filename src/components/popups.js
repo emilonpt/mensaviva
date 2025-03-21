@@ -5,6 +5,19 @@ import { formatRating } from '../utils/formatters.js';
  */
 class PopupComponent {
     /**
+     * Format amenity name to be more readable
+     * 
+     * @param {string} amenity - Amenity type
+     * @returns {string} - Formatted amenity name
+     */
+    formatAmenityName(amenity) {
+        // Convert snake_case to Title Case
+        return amenity
+            .split('_')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+    }
+    /**
      * Create popup content for a restaurant
      * 
      * @param {Object} restaurant - Restaurant data
@@ -27,6 +40,10 @@ class PopupComponent {
                 <h3>${restaurant.name}</h3>
                 
                 <div class="restaurant-details">
+                    <div class="info-row">
+                        <i class="fas fa-utensils"></i>
+                        <span>${this.formatAmenityName(restaurant.amenity || 'restaurant')}</span>
+                    </div>
                     ${restaurant.address ? `
                         <div class="info-row">
                             <i class="fas fa-map-marker-alt"></i>

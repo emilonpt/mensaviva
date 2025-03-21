@@ -1,0 +1,167 @@
+/* Controls Container */
+.controls-container {
+    position: fixed;
+    top: calc(48px + 4rem);
+    left: var(--controls-left);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    min-width: 80px;
+}
+
+.controls-top {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.control-button {
+    width: 80px;
+    height: 80px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--text-primary);
+    flex-shrink: 0;
+    font-size: 1.75rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.control-button:hover,
+.control-button.active {
+    background: var(--primary-color);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+/* Filter button active state */
+.control-button.has-filters {
+    background: var(--primary-color);
+    color: white;
+}
+
+/* Zoom Controls */
+.fab-container {
+    position: fixed;
+    bottom: 3rem;
+    right: 3rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    z-index: 1000;
+}
+
+.fab {
+    width: 80px;
+    height: 80px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(8px);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-primary);
+    font-size: 1.75rem;
+    transition: all 0.2s;
+    box-shadow: var(--shadow-sm);
+}
+
+.fab:hover {
+    transform: translateY(-2px);
+    background: var(--primary-color);
+    color: white;
+    box-shadow: var(--shadow-md);
+}
+
+.fab:active {
+    transform: translateY(-1px);
+}
+
+/* Reviews Toggle */
+.reviews-toggle-container {
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(8px);
+    padding: 1rem 2rem;
+    border-radius: 40px;
+    width: fit-content;
+    margin-top: 1rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.reviews-toggle {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.toggle-label {
+    font-size: 1.25rem;
+    color: var(--text-secondary);
+    user-select: none;
+}
+
+/* Switch */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 60px;
+    height: 32px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(203, 213, 225, 0.8);
+    transition: .4s;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 24px;
+    width: 24px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: .4s;
+}
+
+input:checked + .slider {
+    background-color: var(--primary-color);
+}
+
+input:focus + .slider {
+    box-shadow: 0 0 1px var(--primary-color);
+}
+
+input:checked + .slider:before {
+    transform: translateX(28px);
+}
+
+.slider.round {
+    border-radius: 32px;
+}
+
+.slider.round:before {
+    border-radius: 50%;
+}

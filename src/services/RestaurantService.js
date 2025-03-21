@@ -1,11 +1,12 @@
-const axios = require('axios');
-const sqlite3 = require('sqlite3').verbose();
-const crypto = require('crypto');
+import axios from 'axios';
+import sqlite3 from 'sqlite3';
+const { Database } = sqlite3.verbose();
+import crypto from 'crypto';
 
 class RestaurantService {
     constructor() {
         console.log('Initializing RestaurantService...');
-        this.db = new sqlite3.Database('restaurant.db');
+        this.db = new Database('restaurant.db');
         this.lastFetch = 0;
         this.RATE_LIMIT = 5000; // 5 seconds between API calls
         this.initializeDatabase();
@@ -84,12 +85,28 @@ class RestaurantService {
     }
 
     buildOverpassQuery(bounds) {
-        // Coordinates should already be validated at this point
+        // Define food-related amenities to query
+        const foodAmenities = [
+            "restaurant",
+            "cafe",
+            "fast_food",
+            "bar",
+            "pub",
+            "food_court",
+            "ice_cream",
+            "bakery"
+        ];
+        
+        // Build query for each amenity type
+        const amenityQueries = foodAmenities.map(amenity => `
+    node["amenity"="${amenity}"](${bounds.south},${bounds.west},${bounds.north},${bounds.east});
+    way["amenity"="${amenity}"](${bounds.south},${bounds.west},${bounds.north},${bounds.east});
+    relation["amenity"="${amenity}"](${bounds.south},${bounds.west},${bounds.north},${bounds.east});
+  `).join('\n');
+        
         return `[out:json][timeout:25];
 (
-  node["amenity"="restaurant"](${bounds.south},${bounds.west},${bounds.north},${bounds.east});
-  way["amenity"="restaurant"](${bounds.south},${bounds.west},${bounds.north},${bounds.east});
-  relation["amenity"="restaurant"](${bounds.south},${bounds.west},${bounds.north},${bounds.east});
+  ${amenityQueries}
 );
 out center;
 out body;`;
@@ -180,8 +197,8 @@ out body;`;
             this.db.serialize(() => {
                 const stmt = this.db.prepare(`
                     INSERT OR REPLACE INTO restaurants 
-                    (osm_id, name, lat, lng, address, opening_hours, last_updated, bbox_key)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    (osm_id, name, lat, lng, address, opening_hours, last_updated, bbox_key, amenity)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `);
 
                 osmData.elements.forEach(element => {
@@ -198,7 +215,8 @@ out body;`;
                                 element.tags['addr:full'] || null,
                                 element.tags.opening_hours || null,
                                 new Date().toISOString(),
-                                bboxKey
+                                bboxKey,
+                                element.tags.amenity || 'restaurant'
                             );
                         }
                     }
@@ -326,4 +344,4 @@ out body;`;
     }
 }
 
-module.exports = RestaurantService;
+export default RestaurantService;

@@ -6,7 +6,9 @@ import debounce from '../utils/debounce.js';
 class ApiService {
     constructor() {
         this.lastFetchedBounds = null;
+        this.lastZoom = null;
         this.restaurantDataCache = new Map();
+        this.cachedRestaurants = new Map(); // Store by OSM ID to avoid duplicates
         this.RATE_LIMIT = 300; // 300ms debounce time for fetching restaurants
     }
 
@@ -15,11 +17,16 @@ class ApiService {
      * 
      * @param {L.LatLngBounds} currentBounds - Current map bounds
      * @param {L.LatLngBounds} lastBounds - Last fetched bounds
+     * @param {number} currentZoom - Current map zoom level
      * @param {number} threshold - Threshold for determining significant change (0-1)
      * @returns {boolean} - Whether bounds have changed significantly
      */
-    boundsChanged(currentBounds, lastBounds, threshold = 0.2) {
+
+    boundsChanged(currentBounds, lastBounds, currentZoom, threshold = 0.05) {
         if (!lastBounds) return true;
+        
+        // Always fetch if zoom level changed
+        if (currentZoom !== this.lastZoom) return true;
         
         const currentCenter = currentBounds.getCenter();
         const lastCenter = lastBounds.getCenter();
@@ -36,17 +43,36 @@ class ApiService {
     }
 
     /**
+     * Get restaurants within bounds from the cache
+     * 
+     * @param {L.LatLngBounds} bounds - Map bounds to check
+     * @returns {Array} - Array of restaurants within the bounds
+     */
+    getRestaurantsInBounds(bounds) {
+        if (!this.lastFetchedBounds) return [];
+
+        // Convert Map to array and filter by bounds
+        return Array.from(this.cachedRestaurants.values()).filter(restaurant => {
+            // Check if restaurant coordinates are within current bounds
+            return restaurant.lat >= bounds.getSouth() &&
+                   restaurant.lat <= bounds.getNorth() &&
+                   restaurant.lng >= bounds.getWest() &&
+                   restaurant.lng <= bounds.getEast();
+        });
+    }
+
+    /**
      * Fetch restaurants in the current viewport
      * 
      * @param {L.LatLngBounds} bounds - Current map bounds
      * @param {boolean} forceUpdate - Whether to force an update regardless of cache
      * @returns {Promise<Array>} - Promise resolving to array of restaurant objects
      */
-    async fetchRestaurants(bounds, forceUpdate = false) {
-        // Skip fetch if bounds haven't changed significantly and not forced
-        if (!forceUpdate && !this.boundsChanged(bounds, this.lastFetchedBounds)) {
-            console.log('Skipping fetch - map movement too small');
-            return [];
+    async fetchRestaurants(bounds, forceUpdate = false, currentZoom = null) {
+        // Return cached restaurants if bounds haven't changed significantly and not forced
+        if (!forceUpdate && !this.boundsChanged(bounds, this.lastFetchedBounds, currentZoom || this.lastZoom)) {
+            console.log('Using cached restaurants - map movement too small');
+            return this.getRestaurantsInBounds(bounds);
         }
         
         const params = {
@@ -69,13 +95,19 @@ class ApiService {
             const restaurants = await response.json();
             console.log(`Fetched ${restaurants.length} restaurants from server`);
             
-            // Update lastFetchedBounds
+            // Update lastFetchedBounds, lastZoom, and cache
             this.lastFetchedBounds = L.latLngBounds(
                 [bounds.getSouth(), bounds.getWest()],
                 [bounds.getNorth(), bounds.getEast()]
             );
+            this.lastZoom = currentZoom;
             
-            return restaurants;
+            // Update cache with new restaurants, using OSM ID as key to avoid duplicates
+            restaurants.forEach(restaurant => {
+                this.cachedRestaurants.set(restaurant.osm_id, restaurant);
+            });
+            
+            return this.getRestaurantsInBounds(bounds);
         } catch (error) {
             console.error('Error fetching restaurants:', error);
             return [];

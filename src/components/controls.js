@@ -106,11 +106,13 @@ class ControlsComponent {
         const foodFilter = document.getElementById('food-filter');
         const priceFilter = document.getElementById('price-filter');
         const ambienceFilter = document.getElementById('ambience-filter');
+        const amenityFilter = document.getElementById('amenity-filter');
 
         // Initialize all custom selects
         if (foodFilter) this.initializeCustomSelect(foodFilter);
         if (priceFilter) this.initializeCustomSelect(priceFilter);
         if (ambienceFilter) this.initializeCustomSelect(ambienceFilter);
+        if (amenityFilter) this.initializeCustomSelect(amenityFilter);
     }
 
     /**

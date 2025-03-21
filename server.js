@@ -1,11 +1,16 @@
-const express = require('express');
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
-const RestaurantService = require('./src/services/RestaurantService');
+import express from 'express';
+import sqlite3 from 'sqlite3';
+const { Database } = sqlite3.verbose();
+import path from 'path';
+import { fileURLToPath } from 'url';
+import RestaurantService from './src/services/RestaurantService.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const port = 3000;
-const db = new sqlite3.Database('restaurant.db');
+const db = new Database('restaurant.db');
 const restaurantService = new RestaurantService();
 
 app.use(express.json());

@@ -12,6 +12,37 @@ class MarkersComponent {
         this.markerLayers = {}; // Track which layer each marker belongs to
         this.allTags = new Set(); // Store all unique tags from restaurants
         this.restaurantDataCache = new Map(); // Cache for restaurant data
+        this.popupTimeouts = new Map(); // Store timeout IDs for popup auto-close
+        this.popupHoverStates = new Map(); // Track if mouse is over popup or marker
+        
+        // Define emojis for different amenity types
+        this.amenityEmojis = {
+            'restaurant': '🍴',
+            'cafe': '☕',
+            'fast_food': '🍔',
+            'bar': '🍸',
+            'pub': '🍺',
+            'food_court': '🏢',
+            'ice_cream': '🍦',
+            'bakery': '🥐'
+        };
+        
+        // Define emojis for ratings
+        this.ratingEmojis = {
+            'food': '🍽️',
+            'price': '💰',
+            'ambience': '🌟'
+        };
+    }
+    
+    /**
+     * Get emoji based on amenity type
+     * 
+     * @param {string} amenity - Amenity type
+     * @returns {string} - Emoji for the amenity
+     */
+    getAmenityEmoji(amenity) {
+        return this.amenityEmojis[amenity] || '📍';
     }
 
     /**
@@ -31,6 +62,10 @@ class MarkersComponent {
                 marker.closePopup();
             }
         });
+        // Clear all timeouts
+        this.popupTimeouts.forEach((timeoutId) => clearTimeout(timeoutId));
+        this.popupTimeouts.clear();
+        this.popupHoverStates.clear();
     }
 
     /**
@@ -38,7 +73,7 @@ class MarkersComponent {
      * 
      * @param {Object} restaurant - Restaurant data
      * @param {boolean} forceUpdate - Whether to force an update regardless of cache
-     * @returns {Promise<L.CircleMarker>} - Promise resolving to the created/updated marker
+     * @returns {Promise<L.Marker>} - Promise resolving to the created/updated marker
      */
     async updateMarker(restaurant, forceUpdate = false) {
         console.log(`Markers.js - updateMarker called for restaurant: ${restaurant.name} (${restaurant.osm_id})`);
@@ -72,40 +107,104 @@ class MarkersComponent {
                 console.log(`Markers.js - Removing existing marker for: ${restaurant.name}`);
                 const currentLayer = this.markerLayers[restaurant.osm_id];
                 MapComponent.removeMarkerFromLayer(this.markers[restaurant.osm_id], currentLayer);
+                
+                // Clear any existing timeout and hover state for this marker
+                const timeoutId = this.popupTimeouts.get(restaurant.osm_id);
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                    this.popupTimeouts.delete(restaurant.osm_id);
+                }
+                this.popupHoverStates.delete(restaurant.osm_id);
             }
             
+            const hasReviews = comments.some(comment => 
+                comment.food_rating || comment.price_rating || comment.ambience_rating || comment.text
+            ) || tags.length > 0;
+            
+            // Create marker content with emoji
+            const amenityEmoji = this.getAmenityEmoji(restaurant.amenity);
+            
+            // Create a custom icon with the emoji and ratings
+            let iconContent = `<div class="marker-content">${amenityEmoji}</div>`;
+            
+            // Create a divIcon
+            const customIcon = L.divIcon({
+                className: 'custom-marker',
+                html: hasReviews ? 
+                    `<div class="marker-rectangle">
+                        ${iconContent}
+                        <div class="ratings-container">
+                            <span class="rating-item${avgRatings.food === null ? ' empty' : ''}">${avgRatings.food !== null ? Math.round(avgRatings.food) : ''}</span>
+                            <span class="rating-item${avgRatings.price === null ? ' empty' : ''}">${avgRatings.price !== null ? Math.round(avgRatings.price) : ''}</span>
+                            <span class="rating-item${avgRatings.ambience === null ? ' empty' : ''}">${avgRatings.ambience !== null ? Math.round(avgRatings.ambience) : ''}</span>
+                        </div>
+                    </div>` : 
+                    `${iconContent}`,
+                iconSize: [hasReviews ? 60 : 24, hasReviews ? 50 : 24],
+                iconAnchor: [hasReviews ? 30 : 12, hasReviews ? 12 : 12]
+            });
+            
             let marker = this.markers[restaurant.osm_id];
+            
             if (!marker) {
                 console.log(`Markers.js - Creating new marker for: ${restaurant.name} at [${restaurant.lat}, ${restaurant.lng}]`);
-                marker = L.circleMarker([restaurant.lat, restaurant.lng], {
-                    opacity: 1,
+                
+                // Create a marker with the custom icon
+                marker = L.marker([restaurant.lat, restaurant.lng], {
+                    icon: customIcon,
+                    zIndexOffset: hasReviews ? 1000 : 0
                 });
                 
                 // Use event delegation for mouseover to improve performance
-                marker.on('mouseover', function(e) {
+                marker.on('mouseover', (e) => {
+                    const markerObj = e.target;
+                    this.popupHoverStates.set(restaurant.osm_id, 'marker');
+                    
+                    // Clear any existing timeout
+                    const timeoutId = this.popupTimeouts.get(restaurant.osm_id);
+                    if (timeoutId) {
+                        clearTimeout(timeoutId);
+                        this.popupTimeouts.delete(restaurant.osm_id);
+                    }
+
                     // Only close other popups when this one opens
-                    if (!this.isPopupOpen()) {
+                    if (!markerObj.isPopupOpen()) {
                         MapComponent.map.fire('closeAllPopups');
                     }
                     
-                    this.openPopup();
-                    this.setStyle({
-                        fillColor: "#F59E0B"
-                    });
+                    markerObj.openPopup();
+                    const markerElement = markerObj.getElement();
+                    if (markerElement) {
+                        const markerShape = markerElement.querySelector('.marker-circle') || 
+                                          markerElement.querySelector('.marker-rectangle');
+                        if (markerShape) {
+                            markerShape.classList.add('hover');
+                        }
+                    }
                 });
                 
-                marker.on('mouseout', function(e) {
-                    // Reset fill color when mouse leaves
-                    if (!this.isPopupOpen()) {
-                        const hasReviews = this.restaurantData && 
-                            (this.restaurantData.comments.some(comment => 
-                                comment.food_rating || comment.price_rating || 
-                                comment.ambience_rating || comment.text
-                            ) || this.restaurantData.tags.length > 0);
-                        
-                        this.setStyle({
-                            fillColor: hasReviews ? 'SkyBlue' : 'DimGrey'
-                        });
+                marker.on('mouseout', (e) => {
+                    const markerObj = e.target;
+                    this.popupHoverStates.set(restaurant.osm_id, null);
+                    
+                    const markerElement = markerObj.getElement();
+                    if (markerElement) {
+                        const markerShape = markerElement.querySelector('.marker-circle') || 
+                                          markerElement.querySelector('.marker-rectangle');
+                        if (markerShape) {
+                            markerShape.classList.remove('hover');
+                        }
+                    }
+
+                    // Only start close timeout if we're not hovering over the popup
+                    if (this.popupHoverStates.get(restaurant.osm_id) !== 'popup') {
+                        const timeoutId = setTimeout(() => {
+                            // Double check we're still not hovering over either element
+                            if (!this.popupHoverStates.get(restaurant.osm_id) && markerObj.isPopupOpen()) {
+                                markerObj.closePopup();
+                            }
+                        }, 2000);
+                        this.popupTimeouts.set(restaurant.osm_id, timeoutId);
                     }
                 });
 
@@ -115,8 +214,12 @@ class MarkersComponent {
                 });
                 
                 this.markers[restaurant.osm_id] = marker;
+            } else {
+                // Update existing marker with new icon
+                marker.setIcon(customIcon);
+                marker.setZIndexOffset(hasReviews ? 1000 : 0);
             }
-
+            
             // Store restaurant data with marker
             this.storeRestaurantData(marker, restaurant, avgRatings, tags, comments);
 
@@ -125,20 +228,40 @@ class MarkersComponent {
             
             marker.bindPopup(() => {
                 // This function is only called when the popup is opened
-                return PopupComponent.createPopupContent(restaurant, comments, tags, avgRatings);
-            });
-
-            const hasReviews = comments.some(comment => 
-                comment.food_rating || comment.price_rating || comment.ambience_rating || comment.text
-            ) || tags.length > 0;
-
-            marker.setStyle({
-                color: 'Black',
-                fillColor: hasReviews ? 'SkyBlue' : 'DimGrey',
-                radius: hasReviews ? 18 : 8,
-                weight: 0.5,
-                fillOpacity: 0.8,
-                zIndex: hasReviews ? 1000 : 0
+                const popupContent = PopupComponent.createPopupContent(restaurant, comments, tags, avgRatings);
+                
+                // Add event listeners to the popup container after it's added to the DOM
+                setTimeout(() => {
+                    const popup = marker.getPopup();
+                    if (popup && popup.getElement()) {
+                        const popupContainer = popup.getElement();
+                        
+                        popupContainer.addEventListener('mouseenter', () => {
+                            this.popupHoverStates.set(restaurant.osm_id, 'popup');
+                            const timeoutId = this.popupTimeouts.get(restaurant.osm_id);
+                            if (timeoutId) {
+                                clearTimeout(timeoutId);
+                                this.popupTimeouts.delete(restaurant.osm_id);
+                            }
+                        });
+                        
+                        popupContainer.addEventListener('mouseleave', () => {
+                            this.popupHoverStates.set(restaurant.osm_id, null);
+                            // Only start close timeout if we're not hovering over the marker
+                            if (this.popupHoverStates.get(restaurant.osm_id) !== 'marker') {
+                                const timeoutId = setTimeout(() => {
+                                    // Double check we're still not hovering over either element
+                                    if (!this.popupHoverStates.get(restaurant.osm_id) && marker.isPopupOpen()) {
+                                        marker.closePopup();
+                                    }
+                                }, 2000);
+                                this.popupTimeouts.set(restaurant.osm_id, timeoutId);
+                            }
+                        });
+                    }
+                }, 0);
+                
+                return popupContent;
             });
 
             // Add to appropriate layer and track which layer it belongs to
